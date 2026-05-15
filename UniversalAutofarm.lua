@@ -10,7 +10,7 @@ local CopyButton = Instance.new("TextButton")
 local ButtonCorner = Instance.new("UICorner")
 local CreatorLabel = Instance.new("TextLabel")
 
--- Delta Compatibility: Safely find the best UI container
+-- Delta & Mobile Compatibility: Safely find the best UI container
 local targetParent = nil
 if gethui then
     targetParent = gethui()
@@ -26,7 +26,7 @@ ScreenGui.ResetOnSpawn = false
 Frame.Parent = ScreenGui
 Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Pure Black
 Frame.Position = UDim2.new(0.5, -150, 0.5, -160) -- Centered on screen
-Frame.Size = UDim2.new(0, 300, 0, 320) -- Height increased to 320 to fit creator text safely
+Frame.Size = UDim2.new(0, 300, 0, 320) -- Height accommodates creator text safely
 Frame.Active = true
 Frame.Draggable = true 
 
