@@ -1,128 +1,161 @@
-local ScreenGui = Instance.new("ScreenGui")
-local Frame = Instance.new("Frame")
-local UICorner = Instance.new("UICorner")
-local TitleLabel = Instance.new("TextLabel")
-local Step1Label = Instance.new("TextLabel")
-local Step2Label = Instance.new("TextLabel")
-local Step3Label = Instance.new("TextLabel")
-local Step4Label = Instance.new("TextLabel")
-local CopyButton = Instance.new("TextButton")
-local ButtonCorner = Instance.new("UICorner")
-local CreatorLabel = Instance.new("TextLabel")
+local ScreenGui = Instance.new("ScreenGui") 
+local Frame = Instance.new("Frame") 
+local UICorner = Instance.new("UICorner") 
+local TitleLabel = Instance.new("TextLabel") 
+local Step1Label = Instance.new("TextLabel") 
+local Step2Label = Instance.new("TextLabel") 
+local Step3Label = Instance.new("TextLabel") 
+local Step4Label = Instance.new("TextLabel") 
+local CopyButton = Instance.new("TextButton") 
+local ButtonCorner = Instance.new("UICorner") 
+local CreatorLabel = Instance.new("TextLabel") 
 
--- Delta & Mobile Compatibility: Safely find the best UI container
-local targetParent = nil
-if gethui then
-    targetParent = gethui()
-elseif game:GetService("CoreGui"):ClassName == "CoreGui" then
-    targetParent = game:GetService("CoreGui")
-else
-    targetParent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+-- Delta iPad Optimized UI Parent Finder
+local targetParent = nil 
+if gethui then 
+    targetParent = gethui() 
+else 
+    targetParent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") 
+end 
+
+ScreenGui.Parent = targetParent 
+ScreenGui.ResetOnSpawn = false 
+
+-- 1. Configure Main Background Frame (Black) 
+Frame.Parent = ScreenGui 
+Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0) 
+Frame.Position = UDim2.new(0.5, -150, 0.5, -160) 
+Frame.Size = UDim2.new(0, 300, 0, 320) 
+Frame.Active = true 
+
+UICorner.CornerRadius = UDim.new(0, 8) 
+UICorner.Parent = Frame 
+
+-- Mobile-Friendly Dragging System (Replaces broken Frame.Draggable)
+local UserInputService = game:GetService("UserInputService")
+local dragging, dragInput, dragStart, startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 end
-ScreenGui.Parent = targetParent
-ScreenGui.ResetOnSpawn = false
 
--- 1. Configure Main Background Frame (Black)
-Frame.Parent = ScreenGui
-Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Pure Black
-Frame.Position = UDim2.new(0.5, -150, 0.5, -160) -- Centered on screen
-Frame.Size = UDim2.new(0, 300, 0, 320) -- Height accommodates creator text safely
-Frame.Active = true
-Frame.Draggable = true 
+Frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Frame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
 
-UICorner.CornerRadius = UDim.new(0, 8)
-UICorner.Parent = Frame
+Frame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
 
--- 2. Main Header Text
-TitleLabel.Parent = Frame
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Position = UDim2.new(0, 10, 0, 15)
-TitleLabel.Size = UDim2.new(1, -20, 0, 35)
-TitleLabel.Text = "To access this script join the group"
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+-- 2. Main Header Text 
+TitleLabel.Parent = Frame 
+TitleLabel.BackgroundTransparency = 1 
+TitleLabel.Position = UDim2.new(0, 10, 0, 15) 
+TitleLabel.Size = UDim2.new(1, -20, 0, 35) 
+TitleLabel.Text = "To access this script join the group" 
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255) 
-TitleLabel.TextSize = 16
+TitleLabel.TextSize = 16 
 TitleLabel.Font = Enum.Font.SourceSansBold 
-TitleLabel.TextWrapped = true
+TitleLabel.TextWrapped = true 
 
--- 3. Step 1 Text
-Step1Label.Parent = Frame
-Step1Label.BackgroundTransparency = 1
-Step1Label.Position = UDim2.new(0, 10, 0, 60)
-Step1Label.Size = UDim2.new(1, -20, 0, 25)
-Step1Label.Text = "1. JOIN THE GROUP AND COPY THE LINK"
+-- 3. Step 1 Text 
+Step1Label.Parent = Frame 
+Step1Label.BackgroundTransparency = 1 
+Step1Label.Position = UDim2.new(0, 10, 0, 60) 
+Step1Label.Size = UDim2.new(1, -20, 0, 25) 
+Step1Label.Text = "1. JOIN THE GROUP AND COPY THE LINK" 
 Step1Label.TextColor3 = Color3.fromRGB(200, 200, 200) 
-Step1Label.TextSize = 14
+Step1Label.TextSize = 14 
 Step1Label.Font = Enum.Font.SourceSansBold 
-Step1Label.TextXAlignment = Enum.TextXAlignment.Left
+Step1Label.TextXAlignment = Enum.TextXAlignment.Left 
 
--- 4. Step 2 Text
-Step2Label.Parent = Frame
-Step2Label.BackgroundTransparency = 1
-Step2Label.Position = UDim2.new(0, 10, 0, 90)
-Step2Label.Size = UDim2.new(1, -20, 0, 25)
-Step2Label.Text = "2. tap join group"
+-- 4. Step 2 Text 
+Step2Label.Parent = Frame 
+Step2Label.BackgroundTransparency = 1 
+Step2Label.Position = UDim2.new(0, 10, 0, 90) 
+Step2Label.Size = UDim2.new(1, -20, 0, 25) 
+Step2Label.Text = "2. tap join group" 
 Step2Label.TextColor3 = Color3.fromRGB(200, 200, 200) 
-Step2Label.TextSize = 14
+Step2Label.TextSize = 14 
 Step2Label.Font = Enum.Font.SourceSansBold 
-Step2Label.TextXAlignment = Enum.TextXAlignment.Left
+Step2Label.TextXAlignment = Enum.TextXAlignment.Left 
 
--- 5. Step 3 Text
-Step3Label.Parent = Frame
-Step3Label.BackgroundTransparency = 1
-Step3Label.Position = UDim2.new(0, 10, 0, 120)
-Step3Label.Size = UDim2.new(1, -20, 0, 25)
-Step3Label.Text = "3. reopen the script when you joined the group!"
+-- 5. Step 3 Text 
+Step3Label.Parent = Frame 
+Step3Label.BackgroundTransparency = 1 
+Step3Label.Position = UDim2.new(0, 10, 0, 120) 
+Step3Label.Size = UDim2.new(1, -20, 0, 25) 
+Step3Label.Text = "3. reopen the script when you joined the group!" 
 Step3Label.TextColor3 = Color3.fromRGB(200, 200, 200) 
 Step3Label.TextSize = 13 
 Step3Label.Font = Enum.Font.SourceSansBold 
-Step3Label.TextXAlignment = Enum.TextXAlignment.Left
+Step3Label.TextXAlignment = Enum.TextXAlignment.Left 
 
--- 6. Step 4 Text
-Step4Label.Parent = Frame
-Step4Label.BackgroundTransparency = 1
-Step4Label.Position = UDim2.new(0, 10, 0, 150)
-Step4Label.Size = UDim2.new(1, -20, 0, 25)
-Step4Label.Text = "4. enjoy the script!"
+-- 6. Step 4 Text 
+Step4Label.Parent = Frame 
+Step4Label.BackgroundTransparency = 1 
+Step4Label.Position = UDim2.new(0, 10, 0, 150) 
+Step4Label.Size = UDim2.new(1, -20, 0, 25) 
+Step4Label.Text = "4. enjoy the script!" 
 Step4Label.TextColor3 = Color3.fromRGB(200, 200, 200) 
-Step4Label.TextSize = 14
+Step4Label.TextSize = 14 
 Step4Label.Font = Enum.Font.SourceSansBold 
-Step4Label.TextXAlignment = Enum.TextXAlignment.Left
+Step4Label.TextXAlignment = Enum.TextXAlignment.Left 
 
--- 7. Blue Copy Button
-CopyButton.Parent = Frame
+-- 7. Blue Copy Button 
+CopyButton.Parent = Frame 
 CopyButton.BackgroundColor3 = Color3.fromRGB(0, 120, 255) 
-CopyButton.Position = UDim2.new(0.5, -75, 0, 195)
-CopyButton.Size = UDim2.new(0, 150, 0, 45)
-CopyButton.Text = "Copy"
+CopyButton.Position = UDim2.new(0.5, -75, 0, 195) 
+CopyButton.Size = UDim2.new(0, 150, 0, 45) 
+CopyButton.Text = "Copy" 
 CopyButton.TextColor3 = Color3.fromRGB(255, 255, 255) 
-CopyButton.TextSize = 18
+CopyButton.TextSize = 18 
 CopyButton.Font = Enum.Font.SourceSansBold 
 
-ButtonCorner.CornerRadius = UDim.new(0, 6)
-ButtonCorner.Parent = CopyButton
+ButtonCorner.CornerRadius = UDim.new(0, 6) 
+ButtonCorner.Parent = CopyButton 
 
--- 8. Creator Credit Text
-CreatorLabel.Parent = Frame
-CreatorLabel.BackgroundTransparency = 1
-CreatorLabel.Position = UDim2.new(0, 10, 0, 275)
-CreatorLabel.Size = UDim2.new(1, -20, 0, 30)
-CreatorLabel.Text = "Creator : Jamal567790"
+-- 8. Creator Credit Text 
+CreatorLabel.Parent = Frame 
+CreatorLabel.BackgroundTransparency = 1 
+CreatorLabel.Position = UDim2.new(0, 10, 0, 275) 
+CreatorLabel.Size = UDim2.new(1, -20, 0, 30) 
+CreatorLabel.Text = "Creator : Jamal567790" 
 CreatorLabel.TextColor3 = Color3.fromRGB(255, 255, 255) 
-CreatorLabel.TextSize = 12
+CreatorLabel.TextSize = 12 
 CreatorLabel.Font = Enum.Font.SourceSansBold 
-CreatorLabel.TextXAlignment = Enum.TextXAlignment.Center
+CreatorLabel.TextXAlignment = Enum.TextXAlignment.Center 
 
--- 9. Clipboard Functionality (Enhanced for mobile executors)
+-- 9. iPad Delta Clipboard Compatibility
 local groupLink = "https://roblox.com.bz/communities/4836715480/" 
-local clipFunc = setclipboard or toclipboard or (Clipboard and Clipboard.set)
+local clipFunc = setclipboard or toclipboard or (Clipboard and Clipboard.set) or (syn and syn.write_clipboard)
 
-CopyButton.MouseButton1Click:Connect(function()
-    if clipFunc then
-        clipFunc(groupLink)
-        CopyButton.Text = "Copied!"
-        task.wait(2)
-        CopyButton.Text = "Copy"
-    else
-        CopyButton.Text = "Error: No Clipboard"
-    end
+CopyButton.MouseButton1Click:Connect(function() 
+    if clipFunc then 
+        clipFunc(groupLink) 
+        CopyButton.Text = "Copied!" 
+        task.wait(2) 
+        CopyButton.Text = "Copy" 
+    else 
+        CopyButton.Text = "Error: No Clipboard" 
+    end 
 end)
