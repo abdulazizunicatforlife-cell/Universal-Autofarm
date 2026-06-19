@@ -1,0 +1,438 @@
+// ==UserScript==
+// @name         Chess.com Smart Advisor (3 Best Moves)
+// @namespace    https://greasyfork.org/en/users/123456
+// @version      1.0
+// @description  Shows 3 best moves using minimax + chess.js. Click any move to play. No auto-play. Works on desktop & iOS (Userscripts app).
+// @author       Potato (converted from auto-bot)
+// @license      MIT
+// @match        https://www.chess.com/*
+// @match        https://chess.com/*
+// @run-at       document-end
+// @require      https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    // ─── CONFIG ────────────────────────────────────────────────────────────────
+    const SEARCH_DEPTH = 3;  // depth for minimax
+    const POLL_MS = 1500;    // how often to check board changes
+
+    // ─── PIECE VALUES + PST (same as auto-bot) ──────────────────────────────
+    const PIECE_VALUE = { p:100, n:320, b:330, r:500, q:900, k:20000 };
+    const PST = {
+        p:[0,0,0,0,0,0,0,0,50,50,50,50,50,50,50,50,10,10,20,30,30,20,10,10,
+           5,5,10,25,25,10,5,5,0,0,0,20,20,0,0,0,5,-5,-10,0,0,-10,-5,5,
+           5,10,10,-20,-20,10,10,5,0,0,0,0,0,0,0,0],
+        n:[-50,-40,-30,-30,-30,-30,-40,-50,-40,-20,0,0,0,0,-20,-40,
+           -30,0,10,15,15,10,0,-30,-30,5,15,20,20,15,5,-30,
+           -30,0,15,20,20,15,0,-30,-30,5,10,15,15,10,5,-30,
+           -40,-20,0,5,5,0,-20,-40,-50,-40,-30,-30,-30,-30,-40,-50],
+        b:[-20,-10,-10,-10,-10,-10,-10,-20,-10,0,0,0,0,0,0,-10,
+           -10,0,5,10,10,5,0,-10,-10,5,5,10,10,5,5,-10,
+           -10,0,10,10,10,10,0,-10,-10,10,10,10,10,10,10,-10,
+           -10,5,0,0,0,0,5,-10,-20,-10,-10,-10,-10,-10,-10,-20],
+        r:[0,0,0,0,0,0,0,0,5,10,10,10,10,10,10,5,-5,0,0,0,0,0,0,-5,
+           -5,0,0,0,0,0,0,-5,-5,0,0,0,0,0,0,-5,-5,0,0,0,0,0,0,-5,
+           -5,0,0,0,0,0,0,-5,0,0,0,5,5,0,0,0],
+        q:[-20,-10,-10,-5,-5,-10,-10,-20,-10,0,0,0,0,0,0,-10,
+           -10,0,5,5,5,5,0,-10,-5,0,5,5,5,5,0,-5,
+           0,0,5,5,5,5,0,-5,-10,5,5,5,5,5,0,-10,
+           -10,0,5,0,0,0,0,-10,-20,-10,-10,-5,-5,-10,-10,-20],
+        k:[-30,-40,-40,-50,-50,-40,-40,-30,-30,-40,-40,-50,-50,-40,-40,-30,
+           -30,-40,-40,-50,-50,-40,-40,-30,-30,-40,-40,-50,-50,-40,-40,-30,
+           -20,-30,-30,-40,-40,-30,-30,-20,-10,-20,-20,-20,-20,-20,-20,-10,
+           20,20,0,0,0,0,20,20,20,30,10,0,0,10,30,20],
+    };
+
+    // ─── STATE ────────────────────────────────────────────────────────────────
+    let lastFen = '';
+    let isAnalyzing = false;
+    let uiCreated = false;
+
+    // ─── CREATE UI ────────────────────────────────────────────────────────────
+    function createUI() {
+        if (document.getElementById('chess-advisor-panel')) return;
+
+        const style = document.createElement('style');
+        style.textContent = `
+            #chess-advisor-panel {
+                position: fixed !important; bottom: 20px !important; right: 20px !important;
+                z-index: 2147483647 !important; background: #1a1a2e !important;
+                color: #eee !important; font-family: 'Segoe UI', -apple-system, sans-serif !important;
+                font-size: 14px !important; border-radius: 12px !important;
+                padding: 16px 20px !important; box-shadow: 0 8px 24px rgba(0,0,0,0.8) !important;
+                width: 330px !important; max-height: 420px !important; overflow-y: auto !important;
+                border: 1px solid #4a4a6a !important; user-select: none !important;
+            }
+            #chess-advisor-panel .header {
+                display: flex !important; justify-content: space-between !important;
+                align-items: center !important; margin-bottom: 8px !important;
+            }
+            #chess-advisor-panel .header strong { color: #9b9bff !important; font-size: 15px !important; }
+            #chess-advisor-panel .status { font-size: 12px !important; color: #aaa !important; }
+            #chess-advisor-panel .moves-container { font-size: 13px !important; line-height: 1.6 !important; }
+            #chess-advisor-panel .move-item {
+                background: #2a2a44 !important; padding: 8px 12px !important; margin: 4px 0 !important;
+                border-radius: 6px !important; cursor: pointer !important;
+                display: flex !important; justify-content: space-between !important;
+                transition: background 0.2s !important;
+            }
+            #chess-advisor-panel .move-item:hover { background: #3a3a5e !important; }
+            #chess-advisor-panel .move-item .rank { font-weight: bold !important; }
+            #chess-advisor-panel .move-item .click-hint { font-size: 11px !important; }
+            #chess-advisor-panel .footer {
+                margin-top: 8px !important; font-size: 11px !important; color: #666 !important;
+            }
+        `;
+        document.head.appendChild(style);
+
+        const panel = document.createElement('div');
+        panel.id = 'chess-advisor-panel';
+        panel.innerHTML = `
+            <div class="header">
+                <strong>🧠 Potato Advisor</strong>
+                <span class="status" id="advisor-status">⏳ Idle</span>
+            </div>
+            <div class="moves-container" id="advisor-moves">
+                <div style="color:#888;">Awaiting game...</div>
+            </div>
+            <div class="footer">⚡ Click any move to play | ✅ No auto-play</div>
+        `;
+        document.body.appendChild(panel);
+        uiCreated = true;
+    }
+
+    function setStatus(msg) {
+        const el = document.getElementById('advisor-status');
+        if (el) el.textContent = msg;
+    }
+
+    // ─── BOARD HELPERS (from auto-bot) ──────────────────────────────────────
+    function getBoardEl() {
+        return document.querySelector('chess-board') ||
+               document.querySelector('wc-chess-board') ||
+               document.querySelector('.board');
+    }
+
+    function isFlipped() {
+        const b = getBoardEl();
+        return b ? b.classList.contains('flipped') : false;
+    }
+
+    function getMyColor() { return isFlipped() ? 'b' : 'w'; }
+
+    function getPiecesFromDOM() {
+        const map = {};
+        document.querySelectorAll('.piece').forEach(el => {
+            const classes = Array.from(el.classList);
+            const typeClass   = classes.find(c => /^[wb][pnbrqk]$/.test(c));
+            const squareClass = classes.find(c => /^square-\d{2}$/.test(c));
+            if (!typeClass || !squareClass) return;
+            const color  = typeClass[0];
+            const type   = typeClass[1];
+            const fileNum = parseInt(squareClass[7], 10);
+            const rankNum = parseInt(squareClass[8], 10);
+            const sq = String.fromCharCode(96 + fileNum) + rankNum;
+            map[sq] = { color, type };
+        });
+        return map;
+    }
+
+    function positionsMatch(game, domPieces) {
+        const board = game.board();
+        for (let r = 0; r < 8; r++) {
+            for (let f = 0; f < 8; f++) {
+                const jsPiece = board[r][f];
+                const sq = String.fromCharCode(97 + f) + (8 - r);
+                const domPiece = domPieces[sq];
+                if (!jsPiece && domPiece) return false;
+                if (jsPiece && !domPiece) return false;
+                if (jsPiece && domPiece) {
+                    if (jsPiece.color !== domPiece.color) return false;
+                    if (jsPiece.type  !== domPiece.type)  return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    function buildGame() {
+        const selectors = [
+            '.main-line-row .node-highlight-content',
+            '.main-line-row .move-text-component',
+            'vertical-move-list .node-highlight-content',
+            '[data-ply] .node-highlight-content',
+            '.moves-table .move',
+            '.move-list .node .move',
+        ];
+
+        let texts = [];
+        for (const sel of selectors) {
+            const els = document.querySelectorAll(sel);
+            if (els.length) {
+                texts = Array.from(els)
+                    .map(e => e.textContent.replace(/[+#!?]/g, '').trim())
+                    .filter(t => t && !/^\d+\.+$/.test(t))
+                    .filter(Boolean);
+                if (texts.length) break;
+            }
+        }
+
+        const game = new Chess();
+        for (const san of texts) {
+            try { if (!game.move(san, { sloppy: true })) break; }
+            catch (_) { break; }
+        }
+
+        const domPieces = getPiecesFromDOM();
+        if (Object.keys(domPieces).length === 0) return game;
+
+        if (positionsMatch(game, domPieces)) return game;
+
+        for (let trim = 1; trim <= 3; trim++) {
+            const g2 = new Chess();
+            const trimmed = texts.slice(0, texts.length - trim);
+            let ok = true;
+            for (const san of trimmed) {
+                try { if (!g2.move(san, { sloppy: true })) { ok = false; break; } }
+                catch (_) { ok = false; break; }
+            }
+            if (ok && positionsMatch(g2, domPieces)) {
+                console.log('[Advisor] Synced by trimming', trim, 'move(s)');
+                return g2;
+            }
+        }
+
+        // Fallback: build from DOM
+        const turn = getActiveColor() || game.turn();
+        let fen = '';
+        for (let rank = 8; rank >= 1; rank--) {
+            let empty = 0;
+            for (let file = 1; file <= 8; file++) {
+                const sq = String.fromCharCode(96 + file) + rank;
+                const p = domPieces[sq];
+                if (p) {
+                    if (empty) { fen += empty; empty = 0; }
+                    fen += p.color === 'w' ? p.type.toUpperCase() : p.type;
+                } else {
+                    empty++;
+                }
+            }
+            if (empty) fen += empty;
+            if (rank > 1) fen += '/';
+        }
+        fen += ` ${turn} KQkq - 0 1`;
+        try { return new Chess(fen); }
+        catch (_) { return new Chess(); }
+    }
+
+    function getActiveColor() {
+        const activeClock = document.querySelector('.clock-component.clock-player-turn');
+        if (!activeClock) return null;
+        const allClocks = Array.from(document.querySelectorAll('.clock-component'));
+        if (allClocks.length < 2) return null;
+        const lastClock = allClocks[allClocks.length - 1];
+        const isBottomActive = lastClock.classList.contains('clock-player-turn');
+        return isFlipped() ? (isBottomActive ? 'b' : 'w') : (isBottomActive ? 'w' : 'b');
+    }
+
+    // ─── EVALUATION + MINIMAX (from auto-bot) ──────────────────────────────
+    function evaluate(game) {
+        if (game.in_checkmate()) return game.turn() === 'w' ? -30000 : 30000;
+        if (game.in_draw()) return 0;
+        let score = 0;
+        for (let r = 0; r < 8; r++) {
+            for (let f = 0; f < 8; f++) {
+                const p = game.board()[r][f];
+                if (!p) continue;
+                const idx = r * 8 + f;
+                const pval = PIECE_VALUE[p.type] || 0;
+                const pst = (PST[p.type] || [])[p.color === 'w' ? idx : 63 - idx] || 0;
+                score += p.color === 'w' ? pval + pst : -(pval + pst);
+            }
+        }
+        return score;
+    }
+
+    function minimax(game, depth, alpha, beta, max) {
+        if (depth === 0 || game.game_over()) return evaluate(game);
+        const moves = game.moves();
+        let best = max ? -Infinity : Infinity;
+        for (const m of moves) {
+            game.move(m);
+            const val = minimax(game, depth - 1, alpha, beta, !max);
+            game.undo();
+            if (max) { if (val > best) best = val; alpha = Math.max(alpha, val); }
+            else { if (val < best) best = val; beta = Math.min(beta, val); }
+            if (beta <= alpha) break;
+        }
+        return best;
+    }
+
+    function getTopMoves(game, count = 3) {
+        const moves = game.moves({ verbose: true });
+        if (!moves.length) return [];
+        const max = game.turn() === 'w';
+        const scored = moves.map(mv => {
+            game.move(mv);
+            const val = minimax(game, SEARCH_DEPTH - 1, -Infinity, Infinity, !max);
+            game.undo();
+            return { move: mv, score: val };
+        });
+        scored.sort((a, b) => max ? b.score - a.score : a.score - b.score);
+        return scored.slice(0, count).map(item => item.move);
+    }
+
+    // ─── EXECUTE MOVE (click simulation from auto-bot) ──────────────────────
+    function fireAt(x, y) {
+        const el = document.elementFromPoint(x, y);
+        if (!el) return;
+        const opts = { bubbles:true, cancelable:true, clientX:x, clientY:y, screenX:x, screenY:y, button:0, buttons:1 };
+        const pOpts = { ...opts, pointerId:1, isPrimary:true, pointerType:'mouse' };
+        el.dispatchEvent(new PointerEvent('pointerover', pOpts));
+        el.dispatchEvent(new PointerEvent('pointerenter', { ...pOpts, bubbles:false }));
+        el.dispatchEvent(new MouseEvent('mouseover', opts));
+        el.dispatchEvent(new PointerEvent('pointermove', pOpts));
+        el.dispatchEvent(new MouseEvent('mousemove', opts));
+        el.dispatchEvent(new PointerEvent('pointerdown', pOpts));
+        el.dispatchEvent(new MouseEvent('mousedown', opts));
+        el.dispatchEvent(new PointerEvent('pointerup', pOpts));
+        el.dispatchEvent(new MouseEvent('mouseup', opts));
+        el.dispatchEvent(new MouseEvent('click', opts));
+    }
+
+    function squareCoords(sq) {
+        const board = getBoardEl();
+        if (!board) return null;
+        const rect = board.getBoundingClientRect();
+        const sqSize = rect.width / 8;
+        const file = sq.charCodeAt(0) - 97;
+        const rank = parseInt(sq[1]) - 1;
+        const flip = isFlipped();
+        return {
+            x: rect.left + (flip ? (7 - file + 0.5) : (file + 0.5)) * sqSize,
+            y: rect.top  + (flip ? (rank + 0.5)      : (7 - rank + 0.5)) * sqSize,
+        };
+    }
+
+    function clickSource(sq) {
+        const fileNum = sq.charCodeAt(0) - 96;
+        const rankNum = parseInt(sq[1]);
+        const pieceEl = document.querySelector(`.piece.square-${fileNum}${rankNum}`);
+        if (pieceEl) {
+            const r = pieceEl.getBoundingClientRect();
+            fireAt(r.left + r.width / 2, r.top + r.height / 2);
+            return;
+        }
+        const c = squareCoords(sq);
+        if (c) fireAt(c.x, c.y);
+    }
+
+    function playMove(mv) {
+        if (!mv) return;
+        clickSource(mv.from);
+        setTimeout(() => {
+            const dest = squareCoords(mv.to);
+            if (dest) fireAt(dest.x, dest.y);
+            if (mv.promotion) {
+                setTimeout(() => {
+                    const q = document.querySelector('.promotion-piece.wq,.promotion-piece.bq,[data-piece="q"]');
+                    if (q) q.click();
+                }, 300);
+            }
+        }, 200);
+    }
+
+    // ─── DISPLAY MOVES ──────────────────────────────────────────────────────
+    function displayMoves(moves) {
+        const container = document.getElementById('advisor-moves');
+        if (!container) return;
+        if (!moves || moves.length === 0) {
+            container.innerHTML = `<div style="color:#888;">No moves found.</div>`;
+            return;
+        }
+
+        let html = `<div style="margin-bottom:4px;color:#9b9bff;">🏆 Top ${moves.length} moves:</div>`;
+        moves.forEach((mv, idx) => {
+            const color = idx === 0 ? '#7dff7d' : (idx === 1 ? '#ffd966' : '#ff8a8a');
+            const san = mv.san || mv.from + mv.to;
+            html += `
+                <div class="move-item" data-from="${mv.from}" data-to="${mv.to}" data-promotion="${mv.promotion || ''}" style="border-left: 3px solid ${color};">
+                    <span><span class="rank">${idx+1}.</span> ${san}</span>
+                    <span class="click-hint" style="color:${color};">▶ click</span>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+
+        document.querySelectorAll('#advisor-moves .move-item').forEach(el => {
+            el.addEventListener('click', function() {
+                const mv = {
+                    from: this.dataset.from,
+                    to: this.dataset.to,
+                    promotion: this.dataset.promotion || undefined
+                };
+                playMove(mv);
+            });
+        });
+    }
+
+    // ─── MAIN LOOP ──────────────────────────────────────────────────────────
+    function checkBoard() {
+        if (!uiCreated) return;
+        const game = buildGame();
+        if (!game) return;
+        const fen = game.fen();
+        if (fen === lastFen) return;
+        lastFen = fen;
+
+        if (game.game_over()) {
+            setStatus('Game over');
+            displayMoves([]);
+            return;
+        }
+
+        const myColor = getMyColor();
+        if (game.turn() !== myColor) {
+            setStatus("Opponent's turn...");
+            displayMoves([]);
+            return;
+        }
+
+        setStatus(game.in_check() ? '⚠️ In check! Finding escape...' : 'Thinking...');
+        const topMoves = getTopMoves(game, 3);
+        if (topMoves.length) {
+            setStatus('✅ Ready');
+            displayMoves(topMoves);
+        } else {
+            setStatus('No legal moves');
+            displayMoves([]);
+        }
+    }
+
+    // ─── INIT ──────────────────────────────────────────────────────────────
+    function init() {
+        createUI();
+        // Check on DOM changes
+        const observer = new MutationObserver(() => checkBoard());
+        observer.observe(document.body, { childList: true, subtree: true });
+        // Poll as fallback
+        setInterval(checkBoard, POLL_MS);
+        // Initial check
+        setTimeout(checkBoard, 1000);
+    }
+
+    // Boot
+    if (document.readyState === 'complete') {
+        init();
+    } else {
+        window.addEventListener('load', init);
+    }
+
+    // Re-init if board appears late
+    setTimeout(init, 2000);
+    setTimeout(init, 5000);
+
+})();
